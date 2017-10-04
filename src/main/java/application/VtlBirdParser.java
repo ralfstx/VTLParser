@@ -9,11 +9,12 @@ import classes.vtlSpecific.BirdVtlNode;
 import classes.vtlSpecific.BirdVtlTree;
 import ecb.birdVtlParser.basicObjects.parserObjects.AST;
 import ecb.birdVtlParser.basicObjects.parserObjects.BirdVtlCompiler;
+import ecb.birdVtlParser.basicObjects.parserObjects.ParseException;
 import functions.Functions;
 
 public class VtlBirdParser {
 
-    public static <T extends BirdVtlNode<S>, S extends NodeType> void main(String[] agrs) {
+    public static <T extends BirdVtlNode<S>, S extends NodeType> void main(String[] agrs) throws ParseException {
 	LocalDateTime start = LocalDateTime.now();
 	System.out.println("*********************************");
 	System.out.println(start);

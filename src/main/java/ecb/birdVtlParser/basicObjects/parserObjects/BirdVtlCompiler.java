@@ -2,8 +2,13 @@ package ecb.birdVtlParser.basicObjects.parserObjects;
 
 import java.util.ArrayList;
 
+import org.antlr.v4.runtime.ANTLRErrorListener;
 import org.antlr.v4.runtime.ANTLRInputStream;
+import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.ConsoleErrorListener;
+import org.antlr.v4.runtime.RecognitionException;
+import org.antlr.v4.runtime.Recognizer;
 import org.antlr.v4.runtime.Vocabulary;
 import org.antlr.v4.runtime.tree.ParseTree;
 
@@ -26,6 +31,10 @@ import staticObjects.StaticObjects;
  * @version 0.1
  */
 public class BirdVtlCompiler extends AbstractCompiler {
+
+  private StringBuilder errorLog = new StringBuilder();
+  private ANTLRErrorListener errorListener = new CollectingErrorListener();
+  private int[] lineLengths;
 
     /**
      * an {@link ArrayList} of {@link String} objects representing the tokens of
@@ -51,12 +60,27 @@ public class BirdVtlCompiler extends AbstractCompiler {
 
     @Override
     public ParseTree compile(String expression) {
-	ANTLRInputStream input = new ANTLRInputStream(expression.replace("\n", " "));
-	VtlLexer lexer = new VtlLexer(input);
-	CommonTokenStream tokens = new CommonTokenStream(lexer);
-	VtlParser parser = new VtlParser(tokens);
-	ParseTree tree = parser.start();
-	return tree;
+      errorLog.setLength(0);
+      lineLengths = calculateLineLengths(expression);
+    	ANTLRInputStream input = new ANTLRInputStream(expression.replace("\n", " "));
+    	VtlLexer lexer = new VtlLexer(input);
+    	lexer.removeErrorListener(ConsoleErrorListener.INSTANCE);
+    	lexer.addErrorListener(errorListener);
+    	CommonTokenStream tokens = new CommonTokenStream(lexer);
+    	VtlParser parser = new VtlParser(tokens);
+    	parser.removeErrorListener(ConsoleErrorListener.INSTANCE);
+      parser.addErrorListener(errorListener);
+    	ParseTree tree = parser.start();
+    	return tree;
+    }
+
+    private int[] calculateLineLengths(String expression) {
+      String[] lines = expression.split("\n");
+      int[] lengths = new int[lines.length];
+      for (int i = 0; i < lines.length; i++) {
+        lengths[i] = lines[i].length() + 1;
+      }
+      return lengths;
     }
 
     /**
@@ -68,7 +92,7 @@ public class BirdVtlCompiler extends AbstractCompiler {
      *            a valid vtl expression
      * @return a {@link BirdVtlTree} object reflecting the vtl expression
      */
-    public BirdVtlTree<BirdVtlNode<NodeType>, NodeType> extractTree(String expression) {
+    public BirdVtlTree<BirdVtlNode<NodeType>, NodeType> extractTree(String expression) throws ParseException {
 	BirdVtlTree<BirdVtlNode<NodeType>, NodeType> tree = null;
 	ParseTree parseTree = compile(expression);
 	if (parseTree != null) {
@@ -79,12 +103,14 @@ public class BirdVtlCompiler extends AbstractCompiler {
 	    visit(parseTree, origin);
 	    tree.setRoot(origin);
 	    if (tree.findAllByType(StaticObjects.errorNodeImpl) != null) {
-		System.err.println("WARNING: syntax error!");
 		tree = null;
 	    } else {
 		tree.transformTreeStructure();
 	    }
 	}
+  if (tree == null) {
+    throw new ParseException(errorLog.toString());
+  }
 	return tree;
     }
 
@@ -129,5 +155,26 @@ public class BirdVtlCompiler extends AbstractCompiler {
 	    childNode.setData((T) nodeType);
 	    node.addChild(childNode);
 	}
+    }
+    
+    class CollectingErrorListener extends BaseErrorListener {
+      public void syntaxError(Recognizer<?, ?> recognizer,
+                  Object offendingSymbol,
+                  int line,
+                  int charPositionInLine,
+                  String msg,
+                  RecognitionException e)
+      {
+        int column = charPositionInLine;
+        for (int i = 0; i < lineLengths.length; i++) {
+          if (column < lineLengths[i]) {
+            break;
+          }
+          line++;
+          column -= lineLengths[i];
+        }
+        errorLog.append("line " + line + ":" + column + " " + msg + "\n");
+      }
+
     }
 }
